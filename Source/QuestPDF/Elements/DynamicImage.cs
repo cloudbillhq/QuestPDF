@@ -20,8 +20,10 @@ namespace QuestPDF.Elements
     /// <returns>An image in PNG, JPEG, or WEBP image format returned as byte array.</returns>
     public delegate byte[]? GenerateDynamicImageDelegate(GenerateDynamicImageDelegatePayload payload);
     
-    internal sealed class DynamicImage : Element
+    internal sealed class DynamicImage : Element, IStateful
     {
+        public bool IsRendered { get; set; }
+        
         internal int? TargetDpi { get; set; }
         internal ImageCompressionQuality? CompressionQuality { get; set; }
         internal bool UseOriginalImage { get; set; }
@@ -29,13 +31,20 @@ namespace QuestPDF.Elements
         
         internal override SpacePlan Measure(Size availableSpace)
         {
-            return availableSpace.IsNegative() 
-                ? SpacePlan.Wrap() 
-                : SpacePlan.FullRender(availableSpace);
+            if (availableSpace.IsNegative())
+                return SpacePlan.Wrap();
+            
+            if (IsRendered)
+                return SpacePlan.None();
+            
+            return SpacePlan.FullRender(availableSpace);
         }
 
         internal override void Draw(Size availableSpace)
         {
+            if (IsRendered)
+                return;
+            
             var dpi = TargetDpi ?? DocumentSettings.DefaultRasterDpi;
             
             var sourcePayload = new GenerateDynamicImageDelegatePayload
@@ -63,6 +72,8 @@ namespace QuestPDF.Elements
 
             var targetImage = Helpers.Helpers.GetImageWithSmallerSize(originalImage, compressedImage);
             Canvas.DrawImage(targetImage, availableSpace);
+            
+            IsRendered = true;
         }
 
         private static ImageSize GetTargetResolution(Size availableSize, int targetDpi)
@@ -74,5 +85,24 @@ namespace QuestPDF.Elements
                 (int)(availableSize.Height * scalingFactor)
             );
         }
+        
+        #region IStateful
+    
+        object IStateful.CloneState()
+        {
+            return IsRendered;
+        }
+
+        void IStateful.SetState(object state)
+        {
+            IsRendered = (bool) state;
+        }
+
+        void IStateful.ResetState(bool hardReset)
+        {
+            IsRendered = false;
+        }
+    
+        #endregion
     }
 }

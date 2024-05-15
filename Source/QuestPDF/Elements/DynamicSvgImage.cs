@@ -6,15 +6,24 @@ using QuestPDF.Skia;
 
 namespace QuestPDF.Elements;
 
-internal class DynamicSvgImage : Element
+internal class DynamicSvgImage : Element, IStateful
 {
+    public bool IsRendered { get; set; }
     public GenerateDynamicSvgDelegate SvgSource { get; set; }
 
     internal override SpacePlan Measure(Size availableSpace)
     {
-        return availableSpace.IsNegative() 
-            ? SpacePlan.Wrap() 
-            : SpacePlan.FullRender(availableSpace);
+        // return availableSpace.IsNegative() 
+        //     ? SpacePlan.Wrap() 
+        //     : SpacePlan.FullRender(availableSpace);
+        
+        if (availableSpace.IsNegative())
+            return SpacePlan.Wrap();
+        
+        if (IsRendered)
+            return SpacePlan.None();
+        
+        return SpacePlan.FullRender(Size.Zero);
     }
 
     internal override void Draw(Size availableSpace)
@@ -26,5 +35,26 @@ internal class DynamicSvgImage : Element
 
         using var svgImage = new SkSvgImage(svg, FontManager.CurrentFontManager);
         Canvas.DrawSvg(svgImage, availableSpace);
+        
+        IsRendered = true;
     }
+    
+    #region IStateful
+    
+    object IStateful.CloneState()
+    {
+        return IsRendered;
+    }
+
+    void IStateful.SetState(object state)
+    {
+        IsRendered = (bool) state;
+    }
+
+    void IStateful.ResetState(bool hardReset)
+    {
+        IsRendered = false;
+    }
+    
+    #endregion
 }

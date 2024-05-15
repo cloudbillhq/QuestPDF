@@ -13,7 +13,7 @@ namespace QuestPDF.Elements
         public Position Offset { get; set; }
     }
 
-    internal sealed class Column : Element, ICacheable, IStateResettable
+    internal sealed class Column : Element, IStateful, ICacheable
     {
         internal List<Element> Items { get; } = new();
         internal float Spacing { get; set; }
@@ -39,7 +39,10 @@ namespace QuestPDF.Elements
         internal override SpacePlan Measure(Size availableSpace)
         {
             if (!Items.Any())
-                return SpacePlan.FullRender(Size.Zero);
+                return SpacePlan.None();
+            
+            if (CurrentRenderingIndex == Items.Count)
+                return SpacePlan.None();
             
             if (CurrentRenderingIndex == Items.Count)
                 return SpacePlan.FullRender(Size.Zero);
@@ -56,7 +59,10 @@ namespace QuestPDF.Elements
             if (width > availableSpace.Width + Size.Epsilon || height > availableSpace.Height + Size.Epsilon)
                 return SpacePlan.Wrap();
             
-            var totalRenderedItems = CurrentRenderingIndex + renderingCommands.Count(x => x.Measurement.Type is SpacePlanType.FullRender);
+            if (renderingCommands.All(x => x.Measurement.Type == SpacePlanType.NoContent))
+                return SpacePlan.None();
+            
+            var totalRenderedItems = CurrentRenderingIndex + renderingCommands.Count(x => x.Measurement.Type is SpacePlanType.NoContent or SpacePlanType.FullRender);
             var willBeFullyRendered = totalRenderedItems == Items.Count;
 
             return willBeFullyRendered
@@ -70,16 +76,17 @@ namespace QuestPDF.Elements
 
             foreach (var command in renderingCommands)
             {
-                var targetSize = new Size(availableSpace.Width, command.Measurement.Height);
+                // var targetSize = new Size(availableSpace.Width, command.Measurement.Height);
+                var targetSize = new Size(availableSpace.Width, command.Size.Height);
 
                 Canvas.Translate(command.Offset);
                 command.Element.Draw(targetSize);
                 Canvas.Translate(command.Offset.Reverse());
             }
             
-            var fullyRenderedItems = renderingCommands.Count(x => x.Measurement.Type is SpacePlanType.FullRender);
+            var fullyRenderedItems = renderingCommands.Count(x => x.Measurement.Type is SpacePlanType.NoContent or SpacePlanType.FullRender);
             CurrentRenderingIndex += fullyRenderedItems;
-            
+
             if (CurrentRenderingIndex == Items.Count)
                 ResetState();
         }
@@ -89,7 +96,7 @@ namespace QuestPDF.Elements
             var topOffset = 0f;
             var targetWidth = 0f;
             var commands = new List<ColumnItemRenderingCommand>();
-
+            
             foreach (var item in Items.Skip(CurrentRenderingIndex))
             {
                 var availableHeight = availableSpace.Height - topOffset;
@@ -107,12 +114,13 @@ namespace QuestPDF.Elements
                     break;
 
                 // when the item does not take any space, do not add spacing
-                if (measurement.Width < Size.Epsilon && measurement.Height < Size.Epsilon)
+                if (measurement.Type == SpacePlanType.NoContent)
                     topOffset -= Spacing;
                 
                 commands.Add(new ColumnItemRenderingCommand
                 {
                     Element = item,
+                    Size = measurement,
                     Measurement = measurement,
                     Offset = new Position(0, topOffset)
                 });
@@ -128,5 +136,24 @@ namespace QuestPDF.Elements
 
             return commands;
         }
+        
+        #region IStateful
+
+        object IStateful.CloneState()
+        {
+            return CurrentRenderingIndex;
+        }
+
+        void IStateful.SetState(object state)
+        {
+            CurrentRenderingIndex = (int) state;
+        }
+
+        void IStateful.ResetState(bool hardReset)
+        {
+            CurrentRenderingIndex = 0;
+        }
+    
+        #endregion
     }
 }

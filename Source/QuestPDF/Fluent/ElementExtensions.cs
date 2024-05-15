@@ -359,6 +359,24 @@ namespace QuestPDF.Fluent
             return element.Element(new ScaleToFit());
         }
 
+        /// <summary>
+        /// Creates a multi-column layout within the current container element.
+        /// </summary>
+        public static IContainer MultiColumn(this IContainer element, int columnCount = 2, float spacing = 0)
+        {
+            return element.Element(new MultiColumn()
+            {
+                ColumnCount = columnCount,
+                Spacing = spacing
+            });
+        }
+        
+        // TODO: documentation
+        public static IContainer Repeat(this IContainer element)
+        {
+            return element.Element(new RepeatContent());
+        }
+
         #region Canvas [Obsolete]
 
         private const string CanvasDeprecatedMessage = "The Canvas API has been deprecated since version 2024.3.0. Please use the .Svg(stringContent) API to provide custom content, and consult documentation webpage regarding integrating SkiaSharp with QuestPDF: https://www.questpdf.com/concepts/skia-sharp-integration.html";

@@ -115,6 +115,8 @@ namespace QuestPDF.Drawing
             var content = ConfigureContent(document, settings, useOriginalImages);
 
             var pageContext = new PageContext();
+            content.InjectPageContext(pageContext);
+            
             RenderPass(pageContext, new FreeCanvas(), content);
             pageContext.ProceedToNextRenderingPhase();
             RenderPass(pageContext, canvas, content);
@@ -140,6 +142,8 @@ namespace QuestPDF.Drawing
 
                 foreach (var documentPart in documentParts)
                 {
+                    documentPart.Content.InjectPageContext(documentPageContext);
+                    
                     documentPageContext.SetDocumentId(documentPart.DocumentId);
                     RenderPass(documentPageContext, new FreeCanvas(), documentPart.Content);
                 }
@@ -157,6 +161,8 @@ namespace QuestPDF.Drawing
                 foreach (var documentPart in documentParts)
                 {
                     var pageContext = new PageContext();
+                    documentPart.Content.InjectPageContext(pageContext);
+                    
                     pageContext.SetDocumentId(documentPart.DocumentId);
                     
                     RenderPass(pageContext, new FreeCanvas(), documentPart.Content);
@@ -186,8 +192,8 @@ namespace QuestPDF.Drawing
         private static void RenderPass<TCanvas>(PageContext pageContext, TCanvas canvas, ContainerElement content)
             where TCanvas : ICanvas, IRenderingCanvas
         {
-            content.InjectDependencies(pageContext, canvas);
-            content.VisitChildren(x => (x as IStateResettable)?.ResetState());
+            content.InjectCanvas(canvas);
+            content.VisitChildren(x => (x as IStateful)?.ResetState(true));
 
             while(true)
             {
@@ -236,7 +242,7 @@ namespace QuestPDF.Drawing
                 overflowState.ApplyLayoutOverflowVisualization();
                 
                 content.ApplyContentDirection();
-                content.InjectDependencies(pageContext, canvas);
+                content.InjectCanvas(canvas);
 
                 content.RemoveExistingProxies();
             }
@@ -257,15 +263,17 @@ namespace QuestPDF.Drawing
             }
         }
 
-        internal static void InjectDependencies(this Element content, IPageContext pageContext, ICanvas canvas)
+        internal static void InjectCanvas(this Element content, ICanvas canvas)
+        {
+            content.VisitChildren(x => x.Canvas = canvas);
+        }
+        
+        internal static void InjectPageContext(this Element content, IPageContext pageContext)
         {
             content.VisitChildren(x =>
             {
-                if (x == null)
-                    return;
-                
-                x.PageContext = pageContext;
-                x.Canvas = canvas;
+                if (x is IPageContextAware pageContextAware)
+                    pageContextAware.PageContext = pageContext;
             });
         }
 

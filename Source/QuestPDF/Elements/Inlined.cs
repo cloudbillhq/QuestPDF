@@ -20,7 +20,7 @@ namespace QuestPDF.Elements
         public SpacePlan Size { get; set; }
     }
 
-    internal sealed class Inlined : Element, IContentDirectionAware, IStateResettable
+    internal sealed class Inlined : Element, IStateful, IContentDirectionAware, IStateResettable
     {
         public ContentDirection ContentDirection { get; set; }
         
@@ -48,7 +48,9 @@ namespace QuestPDF.Elements
             SetDefaultAlignment();   
             
             if (CurrentRenderingIndex == Elements.Count)
-                return SpacePlan.FullRender(Size.Zero);
+                // This is the new code for current main branch
+                // return SpacePlan.FullRender(Size.Zero);
+                return SpacePlan.None();
             
             var lines = Compose(availableSpace);
 
@@ -256,5 +258,24 @@ namespace QuestPDF.Elements
                 };
             }
         }
+        
+        #region IStateful
+        
+        object IStateful.CloneState()
+        {
+            return CurrentRenderingIndex;
+        }
+
+        void IStateful.SetState(object state)
+        {
+            CurrentRenderingIndex = (int) state;
+        }
+
+        void IStateful.ResetState(bool hardReset)
+        {
+            CurrentRenderingIndex = 0;
+        }
+    
+        #endregion
     }
 }

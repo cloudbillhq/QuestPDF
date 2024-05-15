@@ -15,8 +15,10 @@ namespace QuestPDF.Elements
         Horizontal
     }
 
-    internal sealed class Line : Element, ILine, ICacheable
+    internal sealed class Line : Element, ILine, IStateful, ICacheable
     {
+        public bool IsRendered { get; set; }
+        
         public LineType Type { get; set; } = LineType.Vertical;
         public Color Color { get; set; } = Colors.Black;
         public float Size { get; set; } = 1;
@@ -25,6 +27,9 @@ namespace QuestPDF.Elements
         {
             if (availableSpace.IsNegative())
                 return SpacePlan.Wrap();
+
+            if (IsRendered)
+                return SpacePlan.None();
             
             return Type switch
             {
@@ -44,6 +49,27 @@ namespace QuestPDF.Elements
             {
                 Canvas.DrawFilledRectangle(new Position(0, -Size/2), new Size(availableSpace.Width, Size), Color);
             }
+            
+            IsRendered = true;
         }
+        
+        #region IStateful
+    
+        object IStateful.CloneState()
+        {
+            return IsRendered;
+        }
+
+        void IStateful.SetState(object state)
+        {
+            IsRendered = (bool) state;
+        }
+
+        void IStateful.ResetState(bool hardReset)
+        {
+            IsRendered = false;
+        }
+    
+        #endregion
     }
 }

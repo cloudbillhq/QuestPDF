@@ -2,12 +2,14 @@
 using System.Collections.Generic;
 using System.Linq;
 using QuestPDF.Drawing;
+using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
 
 namespace QuestPDF.Elements.Table
 {
-    internal sealed class Table : Element, IStateResettable, IContentDirectionAware
+    internal sealed class Table : Element, IStateful, IContentDirectionAware
     {
+        public bool IsRendered { get; set; }
         public ContentDirection ContentDirection { get; set; }
         
         public List<TableColumnDefinition> Columns { get; set; } = new();
@@ -31,16 +33,6 @@ namespace QuestPDF.Elements.Table
             return Cells;
         }
 
-        public void ResetState()
-        {
-            Initialize();
-            
-            foreach (var x in Cells)
-                x.IsRendered = false;
-            
-            CurrentRow = 1;
-        }
-        
         private void Initialize()
         {
             if (CacheInitialized)
@@ -83,8 +75,16 @@ namespace QuestPDF.Elements.Table
         
         internal override SpacePlan Measure(Size availableSpace)
         {
+            Initialize();
+            
+            if (availableSpace.IsNegative())
+                return SpacePlan.Wrap();
+
+            if (IsRendered)
+                return SpacePlan.None();
+
             if (!Cells.Any())
-                return SpacePlan.FullRender(Size.Zero);
+                return SpacePlan.None();
             
             UpdateColumnsWidth(availableSpace.Width);
             var renderingCommands = PlanLayout(availableSpace);
@@ -106,6 +106,8 @@ namespace QuestPDF.Elements.Table
 
         internal override void Draw(Size availableSpace)
         {
+            Initialize();
+            
             UpdateColumnsWidth(availableSpace.Width);
             var renderingCommands = PlanLayout(availableSpace);
 
@@ -130,7 +132,7 @@ namespace QuestPDF.Elements.Table
             var isFullyRendered = CurrentRow > StartingRowsCount;
             
             if (isFullyRendered)
-                ResetState();
+                IsRendered = true;
         }
 
         private int CalculateCurrentRow(ICollection<TableCellRenderingCommand> commands)
@@ -305,5 +307,46 @@ namespace QuestPDF.Elements.Table
                 return columnOffsets[cell.Column + cell.ColumnSpan - 1] - columnOffsets[cell.Column - 1];
             }
         }
+        
+        #region IStateful
+        
+        struct TableState
+        {
+            public bool IsRendered;
+            public int CurrentRow;
+            public bool[] CellsState;
+        }
+        
+        object IStateful.CloneState()
+        {
+            return new TableState
+            {
+                IsRendered = IsRendered,
+                CurrentRow = CurrentRow,
+                CellsState = Cells.Select(x => x.IsRendered).ToArray()
+            };
+        }
+
+        void IStateful.SetState(object state)
+        {
+            var tableState = (TableState) state;
+            
+            IsRendered = tableState.IsRendered;
+            CurrentRow = tableState.CurrentRow;
+            
+            for (var i = 0; i < Cells.Count; i++)
+                Cells[i].IsRendered = tableState.CellsState[i];
+        }
+
+        void IStateful.ResetState(bool hardReset)
+        {
+            foreach (var x in Cells)
+                x.IsRendered = false;
+            
+            CurrentRow = 1;
+            IsRendered = false;
+        }
+    
+        #endregion
     }
 }

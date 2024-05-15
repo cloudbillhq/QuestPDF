@@ -30,18 +30,13 @@ namespace QuestPDF.Elements
         public Position Offset { get; set; }
     }
 
-    internal sealed class Row : Element, ICacheable, IStateResettable, IContentDirectionAware
+    internal sealed class Row : Element, IStateful, ICacheable, IContentDirectionAware
     {
         public ContentDirection ContentDirection { get; set; }
         
         internal List<RowItem> Items { get; } = new();
         internal float Spacing { get; set; }
 
-        public void ResetState()
-        {
-            Items.ForEach(x => x.IsRendered = false);
-        }
-        
         internal override IEnumerable<Element?> GetChildren()
         {
             return Items;
@@ -55,7 +50,7 @@ namespace QuestPDF.Elements
         internal override SpacePlan Measure(Size availableSpace)
         {
             if (!Items.Any())
-                return SpacePlan.FullRender(Size.Zero);
+                return SpacePlan.None();
             
             UpdateItemsWidth(availableSpace.Width);
             var renderingCommands = PlanLayout(availableSpace);
@@ -86,7 +81,7 @@ namespace QuestPDF.Elements
 
             foreach (var command in renderingCommands)
             {
-                if (command.Measurement.Type == SpacePlanType.FullRender)
+                if (command.Measurement.Type is SpacePlanType.NoContent or SpacePlanType.FullRender)
                     command.RowItem.IsRendered = true;
                 
                 if (command.Measurement.Type == SpacePlanType.Wrap)
@@ -102,9 +97,6 @@ namespace QuestPDF.Elements
                 command.RowItem.Draw(targetSize);
                 Canvas.Translate(offset.Reverse());
             }
-            
-            if (Items.All(x => x.IsRendered))
-                ResetState();
         }
 
         private void UpdateItemsWidth(float availableWidth)
@@ -166,5 +158,27 @@ namespace QuestPDF.Elements
             
             return renderingCommands;
         }
+        
+        #region IStateful
+        
+        object IStateful.CloneState()
+        {
+            return Items.Select(x => x.IsRendered).ToArray();
+        }
+
+        void IStateful.SetState(object state)
+        {
+            var states = (bool[]) state;
+            
+            for (var i = 0; i < Items.Count; i++)
+                Items[i].IsRendered = states[i];
+        }
+
+        void IStateful.ResetState(bool hardReset)
+        {
+            Items.ForEach(x => x.IsRendered = false);
+        }
+    
+        #endregion
     }
 }

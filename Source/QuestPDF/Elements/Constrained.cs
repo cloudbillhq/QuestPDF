@@ -16,20 +16,28 @@ namespace QuestPDF.Elements
 
         internal override SpacePlan Measure(Size availableSpace)
         {
+            // TODO: disable this check when available space is close to Max
+            // this will reduce cost of text measurement and its caching
+            
+            var measurementWithAllSpace = base.Measure(availableSpace);
+            
+            if (measurementWithAllSpace.Type is SpacePlanType.NoContent)
+                return SpacePlan.None();
+            
             if (MinWidth > availableSpace.Width + Size.Epsilon)
                 return SpacePlan.Wrap();
             
             if (MinHeight > availableSpace.Height + Size.Epsilon)
                 return SpacePlan.Wrap();
-            
+             
             var available = new Size(
                 Min(MaxWidth, availableSpace.Width),
                 Min(MaxHeight, availableSpace.Height));
 
             var measurement = base.Measure(available);
 
-            if (measurement.Type == SpacePlanType.Wrap)
-                return SpacePlan.Wrap();
+            if (measurement.Type is SpacePlanType.NoContent or SpacePlanType.Wrap)
+                return measurement;
             
             var actualSize = new Size(
                 Max(MinWidth, measurement.Width),
