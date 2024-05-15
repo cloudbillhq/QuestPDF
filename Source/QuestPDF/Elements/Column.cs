@@ -14,23 +14,18 @@ namespace QuestPDF.Elements
         public Position Offset { get; set; }
     }
 
-    internal sealed class Column : Element, IStateful, ICacheable, IStateResettable
+    internal sealed class Column : Element, IStateful, ICacheable
     {
         internal List<Element> Items { get; } = new();
         internal float Spacing { get; set; }
-        
+
         internal int CurrentRenderingIndex { get; set; }
 
-        public void ResetState()
-        {
-            CurrentRenderingIndex = 0;
-        }
-        
         internal override IEnumerable<Element?> GetChildren()
         {
             return Items;
         }
-        
+
         internal override void CreateProxy(Func<Element?, Element?> create)
         {
             for (var i = 0; i < Items.Count; i++)
@@ -41,13 +36,13 @@ namespace QuestPDF.Elements
         {
             if (!Items.Any())
                 return SpacePlan.None();
-            
+
             if (CurrentRenderingIndex == Items.Count)
                 return SpacePlan.None();
-            
-            if (CurrentRenderingIndex == Items.Count)
-                return SpacePlan.FullRender(Size.Zero);
-            
+
+            //if (CurrentRenderingIndex == Items.Count)
+            //    return SpacePlan.FullRender(Size.Zero);
+
             var renderingCommands = PlanLayout(availableSpace);
 
             if (!renderingCommands.Any())
@@ -56,13 +51,13 @@ namespace QuestPDF.Elements
             var width = renderingCommands.Max(x => x.Measurement.Width);
             var height = renderingCommands.Last().Offset.Y + renderingCommands.Last().Measurement.Height;
             var size = new Size(width, height);
-            
+
             if (width > availableSpace.Width + Size.Epsilon || height > availableSpace.Height + Size.Epsilon)
                 return SpacePlan.Wrap();
-            
+
             if (renderingCommands.All(x => x.Measurement.Type == SpacePlanType.NoContent))
                 return SpacePlan.None();
-            
+
             var totalRenderedItems = CurrentRenderingIndex + renderingCommands.Count(x => x.Measurement.Type is SpacePlanType.NoContent or SpacePlanType.FullRender);
             var willBeFullyRendered = totalRenderedItems == Items.Count;
 
@@ -77,19 +72,19 @@ namespace QuestPDF.Elements
 
             foreach (var command in renderingCommands)
             {
-                // var targetSize = new Size(availableSpace.Width, command.Measurement.Height);
+                //var targetSize = new Size(availableSpace.Width, command.Measurement.Height);
                 var targetSize = new Size(availableSpace.Width, command.Size.Height);
 
                 Canvas.Translate(command.Offset);
                 command.Element.Draw(targetSize);
                 Canvas.Translate(command.Offset.Reverse());
             }
-            
+
             var fullyRenderedItems = renderingCommands.Count(x => x.Measurement.Type is SpacePlanType.NoContent or SpacePlanType.FullRender);
             CurrentRenderingIndex += fullyRenderedItems;
 
-            if (CurrentRenderingIndex == Items.Count)
-                ResetState();
+            //if (CurrentRenderingIndex == Items.Count)
+            //    ResetState();
         }
 
         private List<ColumnItemRenderingCommand> PlanLayout(Size availableSpace)
@@ -97,7 +92,7 @@ namespace QuestPDF.Elements
             var topOffset = 0f;
             var targetWidth = 0f;
             var commands = new List<ColumnItemRenderingCommand>();
-            
+
             foreach (var item in Items.Skip(CurrentRenderingIndex))
             {
                 var availableHeight = availableSpace.Height - topOffset;
@@ -105,19 +100,19 @@ namespace QuestPDF.Elements
                 var itemSpace = availableHeight > 0
                     ? new Size(availableSpace.Width, availableHeight)
                     : Size.Zero;
-                
+
                 var measurement = item.Measure(itemSpace);
-                
+
                 if (measurement.Type == SpacePlanType.Wrap)
                     break;
-                
+
                 if (Size.Equal(itemSpace, Size.Zero) && !Size.Equal(measurement, Size.Zero))
                     break;
 
                 // when the item does not take any space, do not add spacing
                 if (measurement.Type == SpacePlanType.NoContent)
                     topOffset -= Spacing;
-                
+
                 commands.Add(new ColumnItemRenderingCommand
                 {
                     Element = item,
@@ -125,19 +120,19 @@ namespace QuestPDF.Elements
                     Measurement = measurement,
                     Offset = new Position(0, topOffset)
                 });
-                
+
                 if (measurement.Width > targetWidth)
                     targetWidth = measurement.Width;
-                
+
                 if (measurement.Type == SpacePlanType.PartialRender)
                     break;
-                
+
                 topOffset += measurement.Height + Spacing;
             }
 
             return commands;
         }
-        
+
         #region IStateful
 
         object IStateful.CloneState()
@@ -147,14 +142,14 @@ namespace QuestPDF.Elements
 
         void IStateful.SetState(object state)
         {
-            CurrentRenderingIndex = (int) state;
+            CurrentRenderingIndex = (int)state;
         }
 
         void IStateful.ResetState(bool hardReset)
         {
             CurrentRenderingIndex = 0;
         }
-    
+
         #endregion
     }
 }
