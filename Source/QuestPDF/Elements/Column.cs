@@ -14,7 +14,7 @@ namespace QuestPDF.Elements
         public Position Offset { get; set; }
     }
 
-    internal sealed class Column : Element, IStateful, ICacheable
+    internal sealed class Column : Element, IStateful, ICacheable, IStateResettable
     {
         internal List<Element> Items { get; } = new();
         internal float Spacing { get; set; }
